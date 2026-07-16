@@ -4,7 +4,21 @@ A CI/CD-integrated evaluation pipeline for RAG-based Q&A systems. Automatically 
 
 ## Why This Exists
 
-LLMs are non-deterministic, and providers silently update models. Without automated regression testing, quality drops — hallucinations, latency spikes, or bad retrievals — are caught by angry users, not engineers. This system runs on every push and nightly to catch regressions automatically.
+LLMs are non-deterministic, and providers silently update models. Without automated regression testing, quality drops — hallucinations, latency spikes, or bad retrievals — are caught by angry users, not engineers. This system runs on
+
+
+
+
+
+
+
+
+
+
+
+
+
+ every push and nightly to catch regressions automatically.
 
 ---
 

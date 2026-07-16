@@ -35,6 +35,20 @@ class Storage:
             output_preview TEXT
         )
         ''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS forensics (
+            trace_id TEXT PRIMARY KEY,
+            query TEXT,
+            retrieval_score REAL,
+            generation_score REAL,
+            category TEXT,
+            confidence REAL,
+            evidence_json TEXT,
+            human_confirmed BOOLEAN DEFAULT 0,
+            human_correction TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
         conn.commit()
         conn.close()
 
@@ -103,3 +117,23 @@ class Storage:
         conn.commit()
         conn.close()
         print(f"Run {run_id} promoted to baseline.")
+
+    def save_diagnosis(self, diagnosis):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+        INSERT OR REPLACE INTO forensics (
+            trace_id, query, retrieval_score, generation_score,
+            category, confidence, evidence_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            diagnosis.trace_id,
+            diagnosis.evidence.query,
+            0.0, # Will update these if we decide to store raw metric scores in the future
+            0.0,
+            diagnosis.category,
+            diagnosis.confidence,
+            diagnosis.evidence.model_dump_json()
+        ))
+        conn.commit()
+        conn.close()

@@ -1,7 +1,14 @@
 import os
 import sqlite3
 import json
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
+
+import sys
+# Add the parent directory (ragwatch/) to path so we can import ragwatch as a package
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from ragwatch.forensics.diagnose import run_diagnosis
+from ragwatch.forensics.feedback import append_to_golden_dataset
+
 
 app = Flask(__name__)
 
@@ -47,6 +54,38 @@ def get_traces():
         return jsonify([])
     finally:
         conn.close()
+
+@app.route("/forensics/<trace_id>")
+def forensics_view(trace_id):
+    return render_template("forensics.html", trace_id=trace_id)
+
+@app.route("/api/forensics/<trace_id>", methods=["POST"])
+def api_run_diagnosis(trace_id):
+    try:
+        # First check if the trace exists in EVAL_DB, then RAGWATCH_DB
+        db_to_use = EVAL_DB
+        conn = get_db_connection(EVAL_DB)
+        if conn:
+            row = conn.execute("SELECT 1 FROM traces WHERE trace_id=?", (trace_id,)).fetchone()
+            conn.close()
+            if not row:
+                db_to_use = RAGWATCH_DB
+        
+        diagnosis = run_diagnosis(trace_id, db_path=db_to_use)
+        return jsonify({"success": True, "data": diagnosis.model_dump()})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route("/api/forensics/<trace_id>/confirm", methods=["POST"])
+def api_confirm_diagnosis(trace_id):
+    try:
+        data = request.json or {}
+        human_correction = data.get("human_correction", "")
+        # forensics records are saved to RAGWATCH_DB by save_diagnosis
+        append_to_golden_dataset(trace_id, human_correction, db_path=RAGWATCH_DB)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 def run():
     print("[RAGWatch UI] Starting RAGWatch Local Dashboard on http://localhost:5050")

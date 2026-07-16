@@ -4,23 +4,28 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ragwatch-sdk"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
   { name="Mohammed Sohel Patwari", email="contactmohammedsohel@gmail.com" },
 ]
-description = "A lightweight evaluation and regression detection library for RAG pipelines."
+description = "Evaluation, monitoring, regression detection, and root-cause forensics for RAG pipelines."
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+license = "MIT"
 dependencies = [
     "numpy",
     "sentence-transformers",
-    "openai"
+    "openai",
+    "pydantic>=2.0",
+    "flask"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/mohammedsohel2052/ragwatch"
+"Homepage" = "https://github.com/mohammedsohel2052-png/Model-regression-detection"
+
+[tool.setuptools.package-data]
+ragwatch = ["templates/*.html"]

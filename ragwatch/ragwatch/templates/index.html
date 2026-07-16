@@ -1,409 +1,642 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAGWatch Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-            --glass-bg: rgba(255, 255, 255, 0.05);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-            --accent: #38bdf8;
-            --accent-glow: 0 0 15px rgba(56, 189, 248, 0.5);
-            --success: #34d399;
-            --warning: #fbbf24;
-            --danger: #f87171;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-        }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAGWatch — AI Pipeline Monitoring</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='black'/%3E%3Ccircle cx='32' cy='32' r='16' fill='none' stroke='white' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='5' fill='white'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Outfit', sans-serif;
-            background: var(--bg-gradient);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
+  :root {
+    --spring: cubic-bezier(.34, 1.56, .64, 1);
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --stroke: rgba(255, 255, 255, .08);
+    --stroke-top: rgba(255, 255, 255, .17);
+    --text: #f5f5f7;
+    --dim: rgba(255, 255, 255, .55);
+    --faint: rgba(255, 255, 255, .32);
+    --live: #4ade80;
+  }
 
-        /* Glass Navbar */
-        nav {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--glass-border);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+  html { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.16) transparent; }
 
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-            color: #fff;
-            text-shadow: var(--accent-glow);
-        }
-        .logo span {
-            color: var(--accent);
-        }
+  body {
+    background: #000;
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-        .tabs {
-            display: flex;
-            gap: 1.5rem;
-        }
-        .tab-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            font-size: 1rem;
-            font-family: inherit;
-            cursor: pointer;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-        .tab-btn:hover {
-            color: #fff;
-            background: rgba(255, 255, 255, 0.1);
-        }
-        .tab-btn.active {
-            color: var(--accent);
-            background: rgba(56, 189, 248, 0.1);
-            box-shadow: inset 0 0 10px rgba(56, 189, 248, 0.2);
-        }
+  ::selection { background: #fff; color: #000; }
 
-        /* Main Container */
-        .container {
-            padding: 2rem;
-            flex-grow: 1;
-            max-width: 1400px;
-            margin: 0 auto;
-            width: 100%;
-            box-sizing: border-box;
-        }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28); }
 
-        /* Glass Cards */
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--glass-shadow);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            animation: fadeUp 0.5s ease forwards;
-            opacity: 0;
-            transform: translateY(20px);
-        }
+  .mono { font-family: 'JetBrains Mono', monospace; }
 
-        @keyframes fadeUp {
-            to { opacity: 1; transform: translateY(0); }
-        }
+  /* ---------- Ambient background ---------- */
+  .orb { position: fixed; border-radius: 50%; pointer-events: none; z-index: 0; }
+  .orb-a { width: 640px; height: 640px; top: -240px; left: -180px;
+    background: radial-gradient(circle, rgba(255,255,255,.065), transparent 68%); }
+  .orb-b { width: 720px; height: 720px; bottom: -300px; right: -220px;
+    background: radial-gradient(circle, rgba(255,255,255,.05), transparent 68%); }
+  .orb-c { width: 420px; height: 420px; top: 38%; left: 62%;
+    background: radial-gradient(circle, rgba(255,255,255,.032), transparent 70%); }
 
-        .glass-card h2 {
-            margin-top: 0;
-            font-weight: 600;
-            font-size: 1.25rem;
-            color: var(--accent);
-            border-bottom: 1px solid var(--glass-border);
-            padding-bottom: 0.75rem;
-            margin-bottom: 1rem;
-        }
+  .grain {
+    position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: .03;
+    filter: grayscale(1);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
 
-        /* Table Styles */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.95rem;
-        }
-        th, td {
-            padding: 1rem;
-            text-align: left;
-            border-bottom: 1px solid var(--glass-border);
-        }
-        th {
-            color: var(--text-muted);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 0.5px;
-        }
-        tr:last-child td {
-            border-bottom: none;
-        }
-        tr:hover td {
-            background: rgba(255, 255, 255, 0.03);
-        }
+  #cursor-glow {
+    position: fixed; top: 0; left: 0; width: 300px; height: 300px;
+    border-radius: 50%; pointer-events: none; z-index: 41;
+    background: radial-gradient(circle, rgba(255,255,255,.055), transparent 62%);
+    will-change: transform;
+  }
 
-        /* Metrics Grid */
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .metric-box {
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            text-align: center;
-            transition: transform 0.3s ease;
-        }
-        .metric-box:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--accent-glow);
-            border-color: rgba(56, 189, 248, 0.3);
-        }
-        .metric-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #fff;
-            margin: 0.5rem 0;
-        }
-        .metric-label {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
+  /* ---------- Glass ---------- */
+  .glass {
+    background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.024));
+    border: 1px solid var(--stroke);
+    border-top-color: var(--stroke-top);
+    border-bottom-color: rgba(255,255,255,.035);
+    border-radius: 20px;
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.05),
+      0 24px 60px rgba(0,0,0,.55),
+      0 4px 14px rgba(0,0,0,.4);
+    transition: transform .45s var(--ease), box-shadow .45s var(--ease),
+      border-color .45s var(--ease), background .45s var(--ease);
+  }
+  .glass:hover {
+    transform: translateY(-3px);
+    border-top-color: rgba(255,255,255,.34);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.08),
+      0 32px 70px rgba(0,0,0,.62),
+      0 8px 20px rgba(0,0,0,.45);
+  }
 
-        /* Badges */
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        .badge.baseline {
-            background: rgba(52, 211, 153, 0.2);
-            color: var(--success);
-            border: 1px solid rgba(52, 211, 153, 0.3);
-        }
-        .badge.run {
-            background: rgba(148, 163, 184, 0.2);
-            color: var(--text-muted);
-            border: 1px solid rgba(148, 163, 184, 0.3);
-        }
+  /* ---------- Entrance ---------- */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(18px) scale(.99); }
+    to   { opacity: 1; transform: none; }
+  }
+  .reveal { animation: rise .65s var(--ease) both; }
 
-        .output-preview {
-            font-family: monospace;
-            background: rgba(0,0,0,0.3);
-            padding: 0.5rem;
-            border-radius: 6px;
-            color: #a78bfa;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 300px;
-            display: inline-block;
-        }
+  /* ---------- Navbar ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(4,4,4,.55);
+    backdrop-filter: blur(30px) saturate(170%);
+    -webkit-backdrop-filter: blur(30px) saturate(170%);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  .nav-inner {
+    max-width: 1120px; margin: 0 auto; padding: 13px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 18px;
+    flex-wrap: wrap;
+  }
+  .logo {
+    font-size: 20px; font-weight: 800; letter-spacing: -.03em;
+    color: #fff; text-decoration: none; display: flex; align-items: center; gap: 9px;
+  }
+  .logo-mark {
+    width: 22px; height: 22px; border: 1.5px solid rgba(255,255,255,.85);
+    border-radius: 50%; position: relative; flex: none;
+  }
+  .logo-mark::after {
+    content: ""; position: absolute; inset: 6px; border-radius: 50%; background: #fff;
+  }
 
-        /* Views */
-        .view-section {
-            display: none;
-        }
-        .view-section.active {
-            display: block;
-        }
+  .tabs {
+    position: relative; display: flex; gap: 2px; padding: 4px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 99px;
+  }
+  .tab-pill {
+    position: absolute; top: 4px; bottom: 4px; left: 4px; width: 0;
+    border-radius: 99px;
+    background: rgba(255,255,255,.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 4px 14px rgba(0,0,0,.4);
+    transition: left .55s var(--spring), width .55s var(--spring);
+  }
+  .tab-btn {
+    position: relative; z-index: 1; background: none; border: 0; cursor: pointer;
+    color: rgba(255,255,255,.5); font: 600 13.5px 'Inter', sans-serif;
+    padding: 8px 16px; border-radius: 99px;
+    display: flex; align-items: center; gap: 7px;
+    transition: color .3s var(--ease), transform .45s var(--spring);
+  }
+  .tab-btn:hover { color: rgba(255,255,255,.8); }
+  .tab-btn.active { color: #fff; }
+  .tab-btn:active { transform: scale(.97); }
+  kbd {
+    font: 500 10px 'JetBrains Mono', monospace;
+    border: 1px solid rgba(255,255,255,.2); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 5px; opacity: .55; line-height: 1.4;
+  }
 
-        .loading {
-            text-align: center;
-            color: var(--accent);
-            padding: 3rem;
-            font-size: 1.2rem;
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-        }
-    </style>
+  .nav-right { display: flex; align-items: center; gap: 10px; }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--live);
+    box-shadow: 0 0 12px rgba(74,222,128,.9); position: relative; flex: none;
+  }
+  .live-dot::before, .live-dot::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 1px solid rgba(74,222,128,.55);
+    animation: ripple 2s cubic-bezier(.2,.6,.35,1) infinite;
+  }
+  .live-dot::after { animation-delay: 1s; }
+  @keyframes ripple {
+    from { transform: scale(1); opacity: .9; }
+    to   { transform: scale(3.4); opacity: 0; }
+  }
+  .live-text { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.85); letter-spacing: .02em; }
+  .version {
+    font-size: 11px; color: var(--dim);
+    border: 1px solid var(--stroke); border-top-color: rgba(255,255,255,.14);
+    border-radius: 99px; padding: 4px 10px;
+    background: rgba(255,255,255,.04);
+  }
+
+  /* ---------- Layout ---------- */
+  .container { max-width: 1120px; margin: 0 auto; padding: 44px 24px 110px; position: relative; z-index: 1; }
+  .tab-panel[hidden] { display: none !important; }
+  @keyframes panelInL { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+  @keyframes panelInR { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: none; } }
+  .tab-panel.anim-l { animation: panelInL .55s var(--ease) both; }
+  .tab-panel.anim-r { animation: panelInR .55s var(--ease) both; }
+
+  .section-head { margin-bottom: 30px; }
+  .eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: .24em;
+    color: var(--faint); text-transform: uppercase;
+  }
+  .section-head h1 {
+    font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 800;
+    letter-spacing: -.035em; margin: 10px 0 8px;
+  }
+  .sub { color: var(--dim); font-size: 14.5px; font-weight: 400; }
+  .live-head { display: flex; align-items: center; gap: 10px; }
+
+  /* ---------- Metric cards ---------- */
+  .metric-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+  }
+  @media (max-width: 1020px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px)  { .metric-grid { grid-template-columns: 1fr; } }
+
+  .metric-card { padding: 22px 22px 20px; }
+  .metric-top { display: flex; align-items: center; gap: 11px; }
+  .icon-box {
+    width: 34px; height: 34px; flex: none; border-radius: 10px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-top-color: rgba(255,255,255,.2);
+  }
+  .icon-box svg { width: 17px; height: 17px; stroke: rgba(255,255,255,.88); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .metric-label { font-size: 12.5px; font-weight: 600; color: var(--dim); letter-spacing: .01em; }
+  .metric-value {
+    font-size: clamp(2.15rem, 4vw, 3.05rem); font-weight: 800;
+    letter-spacing: -.045em; line-height: 1; margin: 16px 0 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .trend { font-size: 12.5px; font-weight: 600; letter-spacing: .01em; }
+  .trend.up { color: rgba(255,255,255,.88); }
+  .trend.down { color: rgba(255,255,255,.36); }
+  .trend.neutral { color: var(--faint); font-weight: 500; }
+
+  /* ---------- Runs list ---------- */
+  .list-head { display: flex; align-items: baseline; gap: 12px; margin: 46px 0 16px; }
+  .list-head h2 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+  .count-chip {
+    font-size: 11px; color: var(--dim);
+    border: 1px solid var(--stroke); border-radius: 99px; padding: 3px 10px;
+  }
+
+  .run-row {
+    display: grid; grid-template-columns: 1.15fr .85fr 1.5fr;
+    align-items: center; gap: 18px;
+    padding: 18px 22px; margin-bottom: 12px; border-radius: 16px;
+  }
+  @media (max-width: 860px) {
+    .run-row { grid-template-columns: 1fr; gap: 12px; }
+  }
+  .run-left { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .run-id { font-size: 13.5px; font-weight: 600; color: #fff; letter-spacing: .02em; }
+  .badge {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .15em;
+    padding: 4px 9px; border-radius: 99px; line-height: 1;
+  }
+  .badge-baseline { border: 1px dashed rgba(255,255,255,.42); color: rgba(255,255,255,.78); }
+  .badge-latest { background: #fff; color: #000; box-shadow: 0 4px 16px rgba(255,255,255,.22); }
+  .run-time { font-size: 12.5px; color: var(--dim); }
+  .run-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .mini-label {
+    display: block; font-size: 9px; font-weight: 700; letter-spacing: .14em;
+    color: var(--faint); margin-bottom: 4px; text-transform: uppercase;
+  }
+  .mini-val { font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,.92); font-variant-numeric: tabular-nums; }
+  .run-row.is-latest {
+    border-top-color: rgba(255,255,255,.34);
+    background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.03));
+  }
+
+  /* ---------- Traces ---------- */
+  .trace-row {
+    display: grid; grid-template-columns: 1.35fr 1.05fr .75fr auto;
+    align-items: center; gap: 18px;
+    padding: 17px 22px; margin-bottom: 12px; border-radius: 16px;
+  }
+  @media (max-width: 860px) {
+    .trace-row { grid-template-columns: 1fr; gap: 12px; }
+  }
+  .trace-info { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+  .trace-project { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .pill {
+    font-size: 11px; color: rgba(255,255,255,.8);
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 99px; padding: 3px 10px;
+    max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .trace-latency { display: flex; align-items: center; gap: 12px; }
+  .lat-track {
+    flex: 1; min-width: 70px; height: 4px; border-radius: 4px;
+    background: rgba(255,255,255,.07); overflow: hidden;
+  }
+  .lat-bar {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, rgba(255,255,255,.14), rgba(255,255,255,.34));
+    transition: width 1s var(--ease);
+  }
+  .lat-val { font-size: 12.5px; color: rgba(255,255,255,.85); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .trace-time { font-size: 12.5px; color: var(--dim); }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    font: 600 13px 'Inter', sans-serif; letter-spacing: .01em;
+    padding: 9px 18px; border-radius: 12px; cursor: pointer;
+    border: 1px solid transparent;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: transform .45s var(--spring), background .3s var(--ease),
+      box-shadow .3s var(--ease), border-color .3s var(--ease), color .3s var(--ease);
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-ghost {
+    background: rgba(255,255,255,.05); color: #fff;
+    border-color: var(--stroke); border-top-color: rgba(255,255,255,.16);
+  }
+  .btn-ghost:hover {
+    background: rgba(255,255,255,.12); transform: translateY(-1px);
+    box-shadow: 0 8px 22px rgba(0,0,0,.4);
+  }
+  .btn-arrow { transition: transform .35s var(--spring); }
+  .btn-ghost:hover .btn-arrow { transform: translateX(3px); }
+
+  /* ---------- Empty state ---------- */
+  .empty { padding: 68px 32px; text-align: center; }
+  .empty:hover { transform: none; }
+  .empty-icon { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 20px; }
+  .empty-icon svg { width: 25px; height: 25px; stroke: rgba(255,255,255,.6); }
+  .empty h3 { font-size: 17px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 8px; }
+  .empty p { color: var(--dim); font-size: 14px; }
+  .empty p .mono { color: rgba(255,255,255,.85); font-size: 13px; }
+
+  @media (max-width: 720px) {
+    .nav-inner { justify-content: center; }
+    .tabs { order: 3; width: 100%; justify-content: center; }
+    .tab-btn { flex: 1; justify-content: center; }
+  }
+</style>
 </head>
 <body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+  <div class="orb orb-c"></div>
+  <div class="grain"></div>
+  <div id="cursor-glow"></div>
 
-    <nav>
-        <div class="logo">RAG<span>Watch</span></div>
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('evals')">Evaluations</button>
-            <button class="tab-btn" onclick="switchTab('traces')">Live Traces</button>
-        </div>
-    </nav>
-
-    <div class="container">
-        
-        <!-- Evaluations View -->
-        <div id="evals" class="view-section active">
-            <div class="metrics-grid" id="latestMetrics">
-                <!-- Populated by JS -->
-            </div>
-
-            <div class="glass-card">
-                <h2>Evaluation Runs History</h2>
-                <div id="runsLoader" class="loading">Loading Evaluation Data...</div>
-                <table id="runsTable" style="display:none;">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Timestamp</th>
-                            <th>Precision</th>
-                            <th>Recall</th>
-                            <th>Relevancy</th>
-                            <th>Faithfulness</th>
-                            <th>Latency</th>
-                        </tr>
-                    </thead>
-                    <tbody id="runsBody">
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Traces View -->
-        <div id="traces" class="view-section">
-            <div class="glass-card">
-                <h2>Live Telemetry Feed (via @monitor)</h2>
-                <div id="tracesLoader" class="loading">Loading Live Traces...</div>
-                <table id="tracesTable" style="display:none;">
-                    <thead>
-                        <tr>
-                            <th>Timestamp</th>
-                            <th>Project</th>
-                            <th>Function</th>
-                            <th>Latency (ms)</th>
-                            <th>Output Preview</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tracesBody">
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="logo" href="/"><span class="logo-mark"></span>RAGWatch</a>
+      <div class="tabs" id="tabs">
+        <div class="tab-pill" id="tabPill"></div>
+        <button class="tab-btn active" data-tab="eval">Evaluations <kbd>1</kbd></button>
+        <button class="tab-btn" data-tab="traces">Live Traces <kbd>2</kbd></button>
+      </div>
+      <div class="nav-right">
+        <span class="live-dot"></span>
+        <span class="live-text">Live</span>
+        <span class="version mono">v0.2.0</span>
+      </div>
     </div>
+  </nav>
 
-    <script>
-        function switchTab(tabId) {
-            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            
-            document.getElementById(tabId).classList.add('active');
-            event.target.classList.add('active');
+  <main class="container">
+    <section id="tab-eval" class="tab-panel">
+      <header class="section-head reveal">
+        <p class="eyebrow">Overview</p>
+        <h1>Evaluation health at a glance</h1>
+        <p class="sub">Latest run measured against the pinned baseline.</p>
+      </header>
+      <div class="metric-grid" id="metricGrid"></div>
+      <header class="list-head">
+        <h2>Evaluation runs</h2>
+        <span class="count-chip mono" id="runCount"></span>
+      </header>
+      <div id="runsList"></div>
+    </section>
 
-            if(tabId === 'evals') loadRuns();
-            if(tabId === 'traces') loadTraces();
-        }
+    <section id="tab-traces" class="tab-panel" hidden>
+      <header class="section-head">
+        <div class="live-head">
+          <span class="live-dot"></span>
+          <p class="eyebrow">Live</p>
+        </div>
+        <h1>Live traces</h1>
+        <p class="sub">Streaming spans from your instrumented pipeline.</p>
+      </header>
+      <div id="tracesList"></div>
+    </section>
+  </main>
 
-        function formatNumber(num) {
-            return Number(num).toFixed(2);
-        }
-        
-        function formatDate(isoString) {
-            if(!isoString) return "N/A";
-            // Check if it's a unix timestamp
-            if(!isNaN(isoString) && Number(isoString) > 0) {
-                 return new Date(Number(isoString)*1000).toLocaleString();
-            }
-            try {
-                return new Date(isoString).toLocaleString();
-            } catch(e) {
-                return isoString;
-            }
-        }
+<script>
+(function () {
+  'use strict';
 
-        async function loadRuns() {
-            try {
-                const res = await fetch('/api/runs');
-                const runs = await res.json();
-                
-                document.getElementById('runsLoader').style.display = 'none';
-                document.getElementById('runsTable').style.display = 'table';
-                
-                if (runs.length > 0) {
-                    const latest = runs[0];
-                    document.getElementById('latestMetrics').innerHTML = `
-                        <div class="metric-box">
-                            <div class="metric-label">Avg Precision</div>
-                            <div class="metric-value">${formatNumber(latest.avg_context_precision)}</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-label">Avg Recall</div>
-                            <div class="metric-value">${formatNumber(latest.avg_context_recall)}</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-label">Answer Relevancy</div>
-                            <div class="metric-value">${formatNumber(latest.avg_answer_relevancy)}</div>
-                        </div>
-                        <div class="metric-box">
-                            <div class="metric-label">Faithfulness</div>
-                            <div class="metric-value">${formatNumber(latest.faithfulness_score)}</div>
-                        </div>
-                    `;
-                }
+  var $ = function (s) { return document.querySelector(s); };
 
-                const tbody = document.getElementById('runsBody');
-                tbody.innerHTML = '';
-                runs.forEach(run => {
-                    const badge = run.is_baseline ? '<span class="badge baseline">Baseline</span>' : '<span class="badge run">Run</span>';
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${badge}</td>
-                            <td>${formatDate(run.timestamp)}</td>
-                            <td>${formatNumber(run.avg_context_precision)}</td>
-                            <td>${formatNumber(run.avg_context_recall)}</td>
-                            <td>${formatNumber(run.avg_answer_relevancy)}</td>
-                            <td>${formatNumber(run.faithfulness_score)}</td>
-                            <td>${formatNumber(run.avg_latency_ms)}ms</td>
-                        </tr>
-                    `;
-                });
-            } catch (e) {
-                console.error(e);
-                document.getElementById('runsLoader').innerText = "No evaluation database found. Run an evaluation first!";
-            }
-        }
+  /* ---------------- Icons ---------------- */
+  var ICONS = {
+    target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r=".6" fill="currentColor" stroke="none"/></svg>',
+    layers: '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+    spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.4L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.6L12 3z"/></svg>',
+    shield: '<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5.2c0 4.4-3 7.6-7 9.3-4-1.7-7-4.9-7-9.3V6l7-3z"/><path d="M9.3 12.2l2 2 3.6-4.2"/></svg>',
+    chart: '<svg viewBox="0 0 24 24"><path d="M5 20v-6M10 20V7M15 20v-9M20 20V4"/></svg>',
+    radar: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r=".8" fill="currentColor" stroke="none"/><path d="M12 12l6.5-6.5"/></svg>'
+  };
 
-        async function loadTraces() {
-            try {
-                const res = await fetch('/api/traces');
-                const traces = await res.json();
-                
-                document.getElementById('tracesLoader').style.display = 'none';
-                document.getElementById('tracesTable').style.display = 'table';
-                
-                const tbody = document.getElementById('tracesBody');
-                tbody.innerHTML = '';
-                traces.forEach(trace => {
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${formatDate(trace.timestamp)}</td>
-                            <td style="color: var(--accent); font-weight:600;">${trace.project}</td>
-                            <td>${trace.function_name}</td>
-                            <td style="color: ${trace.latency_ms > 2000 ? 'var(--warning)' : 'var(--success)'}">${formatNumber(trace.latency_ms)}</td>
-                            <td><span class="output-preview">${trace.output_preview}</span></td>
-                        </tr>
-                    `;
-                });
-            } catch (e) {
-                console.error(e);
-                document.getElementById('tracesLoader').innerText = "No traces database found. Run a @monitored function first!";
-            }
-        }
+  var METRICS = [
+    { key: 'avg_context_precision', label: 'Context Precision', short: 'Prec', icon: ICONS.target },
+    { key: 'avg_context_recall',    label: 'Context Recall',    short: 'Rec',  icon: ICONS.layers },
+    { key: 'avg_answer_relevancy',  label: 'Answer Relevancy',  short: 'Rel',  icon: ICONS.spark },
+    { key: 'faithfulness_score',    label: 'Faithfulness',      short: 'Faith', icon: ICONS.shield }
+  ];
 
-        // Initialize
-        loadRuns();
-    </script>
+  /* ---------------- Helpers ---------------- */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+  function pctVal(v) { if (v == null || v === '') return null; var n = num(v); return n <= 1 ? n * 100 : n; }
+  function fmtPct(v) { var p = pctVal(v); return p == null ? '—' : p.toFixed(1) + '%'; }
+  function timeOf(ts) {
+    if (ts == null) return 0;
+    if (typeof ts === 'number') return ts < 1e12 ? ts * 1000 : ts;
+    var d = new Date(ts); return isNaN(d) ? 0 : d.getTime();
+  }
+  function fmtTime(ts) {
+    var t = timeOf(ts);
+    if (!t) return ts ? String(ts) : '—';
+    return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  function countUp(el, target, fmt, dur) {
+    dur = dur || 600;
+    var start = null;
+    function tick(t) {
+      if (start === null) start = t;
+      var p = Math.min(1, (t - start) / dur);
+      var e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(target * e);
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  function stagger(container) {
+    var els = container.querySelectorAll('.reveal');
+    for (var i = 0; i < els.length; i++) els[i].style.animationDelay = (i * 50) + 'ms';
+  }
+  function getJSON(url) {
+    return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (r) {
+      if (!r.ok) throw new Error(url + ' → ' + r.status);
+      return r.json();
+    });
+  }
+
+  /* ---------------- Cursor glow ---------------- */
+  var glow = $('#cursor-glow');
+  var gx = innerWidth / 2, gy = innerHeight / 2, tx = gx, ty = gy;
+  addEventListener('mousemove', function (e) { tx = e.clientX; ty = e.clientY; });
+  (function loop() {
+    gx += (tx - gx) * .12; gy += (ty - gy) * .12;
+    glow.style.transform = 'translate(' + (gx - 150) + 'px,' + (gy - 150) + 'px)';
+    requestAnimationFrame(loop);
+  })();
+
+  /* ---------------- Tabs ---------------- */
+  var state = {
+    runs: null, traces: null,
+    tab: sessionStorage.getItem('rw-tab') || 'eval',
+    shown: { eval: false, traces: false }
+  };
+  var tabOrder = ['eval', 'traces'];
+  var panels = { eval: $('#tab-eval'), traces: $('#tab-traces') };
+
+  function movePill() {
+    var btn = document.querySelector('.tab-btn.active');
+    var pill = $('#tabPill');
+    if (!btn) return;
+    pill.style.left = btn.offsetLeft + 'px';
+    pill.style.width = btn.offsetWidth + 'px';
+  }
+
+  function switchTab(name, persist) {
+    if (persist !== false) persist = true;
+    if (state.tab === name) { movePill(); return; }
+    var dir = tabOrder.indexOf(name) > tabOrder.indexOf(state.tab) ? 'l' : 'r';
+    state.tab = name;
+    if (persist) { try { sessionStorage.setItem('rw-tab', name); } catch (e) {} }
+    document.querySelectorAll('.tab-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.tab === name);
+    });
+    movePill();
+    Object.keys(panels).forEach(function (key) {
+      var panel = panels[key];
+      if (key === name) {
+        panel.hidden = false;
+        panel.classList.remove('anim-l', 'anim-r');
+        void panel.offsetWidth;
+        panel.classList.add(dir === 'l' ? 'anim-l' : 'anim-r');
+        if (!state.shown[key]) { state.shown[key] = true; renderTab(key, true); }
+      } else {
+        panel.hidden = true;
+      }
+    });
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(function (b) {
+    b.addEventListener('click', function () { switchTab(b.dataset.tab); });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.target.matches('input, textarea, select')) return;
+    if (e.key === '1') switchTab('eval');
+    if (e.key === '2') switchTab('traces');
+  });
+  addEventListener('resize', movePill);
+  addEventListener('load', movePill);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(movePill);
+
+  /* ---------------- Empty states ---------------- */
+  function emptyHtml(icon, animate) {
+    return '<div class="glass empty' + (animate ? ' reveal' : '') + '">' +
+      '<span class="icon-box empty-icon">' + icon + '</span>' +
+      '<h3>No data yet</h3>' +
+      '<p>No data yet. Run <span class="mono">eval_runner.py</span> to get started.</p>' +
+      '</div>';
+  }
+
+  /* ---------------- Evaluations ---------------- */
+  function trendHtml(latest, baseline, key) {
+    if (!latest) return '<span class="trend neutral">No data yet</span>';
+    if (!baseline) return '<span class="trend neutral">No baseline set</span>';
+    if (latest === baseline || (latest.run_id && latest.run_id === baseline.run_id)) {
+      return '<span class="trend neutral">Baseline run</span>';
+    }
+    var a = pctVal(latest[key]), b = pctVal(baseline[key]);
+    if (a == null || b == null) return '<span class="trend neutral">—</span>';
+    var diff = a - b;
+    if (Math.abs(diff) < 0.05) return '<span class="trend neutral">→ level with baseline</span>';
+    var up = diff > 0;
+    return '<span class="trend ' + (up ? 'up' : 'down') + '">' + (up ? '↑' : '↓') +
+      ' ' + Math.abs(diff).toFixed(1) + ' pts vs baseline</span>';
+  }
+
+  function renderEval(animate) {
+    var runs = Array.isArray(state.runs) ? state.runs.slice() : [];
+    var sorted = runs.slice().sort(function (a, b) { return timeOf(b.timestamp) - timeOf(a.timestamp); });
+    var latest = sorted[0] || null;
+    var baseline = null;
+    for (var i = 0; i < runs.length; i++) if (runs[i].is_baseline) { baseline = runs[i]; break; }
+
+    /* Metric cards */
+    var grid = $('#metricGrid');
+    grid.innerHTML = METRICS.map(function (m) {
+      var v = latest ? pctVal(latest[m.key]) : null;
+      return '<article class="glass metric-card' + (animate ? ' reveal' : '') + '">' +
+        '<div class="metric-top"><span class="icon-box">' + m.icon + '</span>' +
+        '<span class="metric-label">' + m.label + '</span></div>' +
+        '<div class="metric-value" data-v="' + (v == null ? '' : v) + '">' + (v == null ? '—' : '0.0%') + '</div>' +
+        '<div class="metric-trend">' + trendHtml(latest, baseline, m.key) + '</div>' +
+        '</article>';
+    }).join('');
+
+    grid.querySelectorAll('.metric-value').forEach(function (el) {
+      var raw = el.getAttribute('data-v');
+      if (raw === '') return;
+      var target = parseFloat(raw);
+      if (animate) countUp(el, target, function (v) { return v.toFixed(1) + '%'; });
+      else el.textContent = target.toFixed(1) + '%';
+    });
+
+    /* Runs list */
+    $('#runCount').textContent = runs.length ? runs.length + (runs.length > 1 ? ' runs' : ' run') : '';
+    var list = $('#runsList');
+    if (!runs.length) {
+      list.innerHTML = emptyHtml(ICONS.chart, animate);
+    } else {
+      list.innerHTML = sorted.map(function (run) {
+        var isLatest = latest && run === latest;
+        var badges = '';
+        if (run.is_baseline) badges += '<span class="badge badge-baseline">BASELINE</span>';
+        if (isLatest) badges += '<span class="badge badge-latest">LATEST</span>';
+        var minis = METRICS.map(function (m) {
+          return '<div class="mini"><span class="mini-label">' + m.short + '</span>' +
+            '<span class="mono mini-val">' + fmtPct(run[m.key]) + '</span></div>';
+        }).join('');
+        return '<article class="glass run-row' + (animate ? ' reveal' : '') + (isLatest ? ' is-latest' : '') + '">' +
+          '<div class="run-left"><span class="mono run-id">' + esc((run.run_id || '').slice(0, 8) || '—') + '</span>' + badges + '</div>' +
+          '<span class="run-time">' + esc(fmtTime(run.timestamp)) + '</span>' +
+          '<div class="run-metrics">' + minis + '</div>' +
+          '</article>';
+      }).join('');
+    }
+    if (animate) stagger(panels.eval);
+  }
+
+  /* ---------------- Traces ---------------- */
+  function renderTraces(animate) {
+    var traces = Array.isArray(state.traces) ? state.traces : [];
+    var list = $('#tracesList');
+    if (!traces.length) {
+      list.innerHTML = emptyHtml(ICONS.radar, animate);
+      if (animate) stagger(panels.traces);
+      return;
+    }
+    var maxLat = 1;
+    traces.forEach(function (t) { maxLat = Math.max(maxLat, num(t.latency_ms)); });
+
+    list.innerHTML = traces.map(function (t) {
+      var lat = num(t.latency_ms);
+      var w = Math.max(4, Math.round(lat / maxLat * 100));
+      return '<article class="glass trace-row' + (animate ? ' reveal' : '') + '">' +
+        '<div class="trace-info"><span class="trace-project">' + esc(t.project || '—') + '</span>' +
+        '<span class="pill mono">' + esc(t.function_name || 'fn') + '</span></div>' +
+        '<div class="trace-latency"><div class="lat-track"><div class="lat-bar" style="width:' + w + '%"></div></div>' +
+        '<span class="mono lat-val">' + Math.round(lat) + ' ms</span></div>' +
+        '<span class="trace-time">' + esc(fmtTime(t.timestamp)) + '</span>' +
+        '<button class="btn btn-ghost diagnose-btn" data-id="' + esc(t.trace_id || '') + '">Diagnose<span class="btn-arrow">→</span></button>' +
+        '</article>';
+    }).join('');
+    if (animate) stagger(panels.traces);
+  }
+
+  $('#tracesList').addEventListener('click', function (e) {
+    var btn = e.target.closest('.diagnose-btn');
+    if (btn && btn.dataset.id) window.location.href = '/forensics/' + btn.dataset.id;
+  });
+
+  function renderTab(name, animate) {
+    if (name === 'eval') renderEval(animate); else renderTraces(animate);
+  }
+
+  /* ---------------- Data loading + auto-refresh ---------------- */
+  function loadAll(first) {
+    return Promise.allSettled([getJSON('/api/runs'), getJSON('/api/traces')]).then(function (res) {
+      if (res[0].status === 'fulfilled') state.runs = res[0].value;
+      if (res[1].status === 'fulfilled') state.traces = res[1].value;
+      if (first) {
+        state.shown.eval = true;
+        renderEval(true);
+        if (state.tab === 'traces') { state.tab = 'eval'; switchTab('traces', false); }
+        movePill();
+      } else {
+        renderTab(state.tab, false);
+      }
+    });
+  }
+
+  loadAll(true);
+  setInterval(function () { loadAll(false); }, 10000);
+})();
+</script>
 </body>
 </html>

@@ -24,6 +24,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "ragwatch"))
 
 from ragwatch import Evaluator
+from ragwatch.forensics.diagnose import run_diagnosis
 from rag_core import load_chunks, embed_chunks, retrieve, embed_fn
 from generator import generate
 
@@ -80,7 +81,19 @@ def main():
     parser.add_argument("--golden-dataset", default="golden_dataset.json", help="Path to golden dataset JSON file")
     parser.add_argument("--doc", default="doc.md", help="Path to knowledge base markdown file")
     parser.add_argument("--db", default="eval_results.db", help="Path to SQLite results database")
+    parser.add_argument("--diagnose", type=str, help="Run forensics diagnosis on a specific trace_id")
     args = parser.parse_args()
+
+    if args.diagnose:
+        print(f"[Runner] Running forensics diagnosis for trace: {args.diagnose}")
+        try:
+            diagnosis = run_diagnosis(args.diagnose, db_path=args.db)
+            print("\n--- Diagnosis Result ---")
+            print(diagnosis.model_dump_json(indent=2))
+        except Exception as e:
+            print(f"[Runner] Diagnosis failed: {e}")
+            sys.exit(1)
+        sys.exit(0)
 
     top_k = args.top_k
 

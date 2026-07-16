@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAGWatch — Trace Forensics</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='black'/%3E%3Ccircle cx='32' cy='32' r='16' fill='none' stroke='white' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='5' fill='white'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --spring: cubic-bezier(.34, 1.56, .64, 1);
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --stroke: rgba(255, 255, 255, .08);
+    --stroke-top: rgba(255, 255, 255, .17);
+    --text: #f5f5f7;
+    --dim: rgba(255, 255, 255, .55);
+    --faint: rgba(255, 255, 255, .32);
+  }
+
+  html { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.16) transparent; }
+
+  body {
+    background: #000;
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection { background: #fff; color: #000; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28); }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ---------- Ambient background ---------- */
+  .orb { position: fixed; border-radius: 50%; pointer-events: none; z-index: 0; }
+  .orb-a { width: 640px; height: 640px; top: -240px; left: -180px;
+    background: radial-gradient(circle, rgba(255,255,255,.065), transparent 68%); }
+  .orb-b { width: 720px; height: 720px; bottom: -300px; right: -220px;
+    background: radial-gradient(circle, rgba(255,255,255,.05), transparent 68%); }
+  .orb-c { width: 420px; height: 420px; top: 42%; left: 60%;
+    background: radial-gradient(circle, rgba(255,255,255,.03), transparent 70%); }
+
+  .grain {
+    position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: .03;
+    filter: grayscale(1);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #cursor-glow {
+    position: fixed; top: 0; left: 0; width: 300px; height: 300px;
+    border-radius: 50%; pointer-events: none; z-index: 41;
+    background: radial-gradient(circle, rgba(255,255,255,.055), transparent 62%);
+    will-change: transform;
+  }
+
+  /* ---------- Glass ---------- */
+  .glass {
+    background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.024));
+    border: 1px solid var(--stroke);
+    border-top-color: var(--stroke-top);
+    border-bottom-color: rgba(255,255,255,.035);
+    border-radius: 20px;
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.05),
+      0 24px 60px rgba(0,0,0,.55),
+      0 4px 14px rgba(0,0,0,.4);
+  }
+  .glass.lift { transition: transform .45s var(--ease), box-shadow .45s var(--ease), border-color .45s var(--ease); }
+  .glass.lift:hover {
+    transform: translateY(-3px);
+    border-top-color: rgba(255,255,255,.34);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.08),
+      0 32px 70px rgba(0,0,0,.62),
+      0 8px 20px rgba(0,0,0,.45);
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(18px) scale(.99); }
+    to   { opacity: 1; transform: none; }
+  }
+  .reveal { animation: rise .65s var(--ease) both; }
+
+  /* ---------- Navbar ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(4,4,4,.55);
+    backdrop-filter: blur(30px) saturate(170%);
+    -webkit-backdrop-filter: blur(30px) saturate(170%);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  .nav-inner {
+    max-width: 1120px; margin: 0 auto; padding: 13px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  }
+  .logo {
+    font-size: 20px; font-weight: 800; letter-spacing: -.03em;
+    color: #fff; text-decoration: none; display: flex; align-items: center; gap: 9px;
+  }
+  .logo-mark {
+    width: 22px; height: 22px; border: 1.5px solid rgba(255,255,255,.85);
+    border-radius: 50%; position: relative; flex: none;
+  }
+  .logo-mark::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: #fff; }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    font: 600 13px 'Inter', sans-serif; letter-spacing: .01em;
+    padding: 9px 18px; border-radius: 12px; cursor: pointer;
+    border: 1px solid transparent; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: transform .45s var(--spring), background .3s var(--ease),
+      box-shadow .3s var(--ease), border-color .3s var(--ease), color .3s var(--ease), opacity .3s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-ghost {
+    background: rgba(255,255,255,.05); color: #fff;
+    border-color: var(--stroke); border-top-color: rgba(255,255,255,.16);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,.12); transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,.4); }
+  .btn-pill { border-radius: 99px; }
+  .btn-primary {
+    background: #fff; color: #000; border-color: #fff;
+    box-shadow: 0 10px 30px rgba(255,255,255,.14);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 38px rgba(255,255,255,.22); }
+  .btn-primary:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-lg { padding: 14px 26px; font-size: 14px; border-radius: 14px; }
+  .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- Layout ---------- */
+  .container { max-width: 1120px; margin: 0 auto; padding: 48px 24px 120px; position: relative; z-index: 1; }
+  .eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: .24em;
+    color: var(--faint); text-transform: uppercase;
+  }
+
+  /* ---------- Loader (scanning beam) ---------- */
+  .loader-wrap { display: grid; place-items: center; min-height: 62vh; }
+  .scan-card { width: min(560px, 92vw); padding: 52px 44px 44px; text-align: center; }
+  .scan-card h2 { font-size: 24px; font-weight: 800; letter-spacing: -.03em; margin: 10px 0 6px; }
+  .loader-tid { font-size: 12px; color: var(--faint); margin-bottom: 34px; word-break: break-all; }
+
+  .scan-viewport {
+    position: relative; height: 46px; overflow: hidden; border-radius: 12px;
+    background: repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 44px);
+  }
+  .scan-line { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(255,255,255,.1); }
+  .scan-beam {
+    position: absolute; top: 50%; left: 0; width: 110px; height: 2px; margin-top: -1px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent);
+    box-shadow: 0 0 22px 4px rgba(255,255,255,.35);
+    animation: sweep 1.9s cubic-bezier(.6,.05,.25,.95) infinite;
+  }
+  @keyframes sweep {
+    0%   { left: -120px; opacity: 0; }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { left: 100%; opacity: 0; }
+  }
+
+  .statuses { margin-top: 30px; display: grid; gap: 12px; justify-items: center; min-height: 96px; }
+  .status-line {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13.5px; font-weight: 500; color: var(--dim);
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .5s var(--ease), transform .5s var(--ease), color .4s;
+  }
+  .status-line.show { opacity: 1; transform: none; }
+  .status-line.done { color: rgba(255,255,255,.38); }
+  .s-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #fff; flex: none;
+    animation: blink 1.1s ease-in-out infinite;
+  }
+  .status-line.done .s-dot { animation: none; background: rgba(255,255,255,.4); }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+
+  .progress {
+    margin-top: 30px; height: 4px; border-radius: 4px;
+    background: rgba(255,255,255,.07); overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; width: 0; border-radius: 4px;
+    background: linear-gradient(90deg, rgba(255,255,255,.5), #fff);
+    box-shadow: 0 0 12px rgba(255,255,255,.4);
+    transition: width 3s cubic-bezier(.25,.8,.35,1);
+  }
+
+  .fade-out { opacity: 0 !important; transform: translateY(-10px); transition: opacity .5s var(--ease), transform .5s var(--ease); }
+
+  /* ---------- Error card ---------- */
+  .error-card { width: min(560px, 92vw); margin: 10vh auto 0; padding: 48px 40px; text-align: center; }
+  .error-card h3 { font-size: 19px; font-weight: 800; letter-spacing: -.02em; margin: 18px 0 10px; }
+  .error-card p { color: var(--dim); font-size: 14px; line-height: 1.65; word-break: break-word; }
+  .error-card .btn { margin-top: 26px; }
+  .icon-box {
+    width: 34px; height: 34px; flex: none; border-radius: 10px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-top-color: rgba(255,255,255,.2);
+  }
+  .icon-box svg { width: 17px; height: 17px; stroke: rgba(255,255,255,.88); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .icon-box.big { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto; }
+  .icon-box.big svg { width: 25px; height: 25px; stroke: rgba(255,255,255,.7); }
+
+  /* ---------- Hero ---------- */
+  .hero-card {
+    position: relative; overflow: hidden;
+    padding: clamp(44px, 6vw, 76px) clamp(28px, 5vw, 64px);
+  }
+  .hero-card::before {
+    content: ""; position: absolute; top: -180px; left: 50%; transform: translateX(-50%);
+    width: 640px; height: 420px; border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(255,255,255,.07), transparent 65%);
+    pointer-events: none;
+  }
+  .hero-card::after {
+    content: ""; position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.4), transparent);
+    pointer-events: none;
+  }
+  .hero-inner { position: relative; }
+  .category-text {
+    font-size: clamp(2.1rem, 6.2vw, 4.6rem);
+    font-weight: 800; letter-spacing: -.035em; line-height: 1.04;
+    margin: 16px 0 0; overflow-wrap: break-word;
+  }
+  .conf-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 28px; }
+  .conf { font-size: 16px; font-weight: 500; color: var(--dim); }
+  .conf strong {
+    font-size: 26px; font-weight: 800; letter-spacing: -.03em; color: #fff;
+    font-variant-numeric: tabular-nums; margin: 0 1px;
+  }
+  .trace-chip {
+    font-size: 12px; color: rgba(255,255,255,.7);
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--stroke); border-top-color: rgba(255,255,255,.15);
+    border-radius: 10px; padding: 7px 13px; word-break: break-all;
+  }
+
+  /* ---------- Category legend (monochrome differentiation) ---------- */
+  .cat-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+  .cat-chip {
+    font: 600 10.5px 'JetBrains Mono', monospace; letter-spacing: .1em;
+    padding: 8px 14px; border-radius: 99px;
+    border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.42);
+    transition: all .45s var(--spring);
+  }
+  .cat-chip[data-cat="RETRIEVAL_MISS"]           { border-style: solid; border-width: 2px; border-color: rgba(255,255,255,.5); color: rgba(255,255,255,.6); }
+  .cat-chip[data-cat="RETRIEVAL_NOISE"]          { border-style: dashed; border-color: rgba(255,255,255,.4); }
+  .cat-chip[data-cat="GENERATION_HALLUCINATION"] { border: 3px double rgba(255,255,255,.55); color: rgba(255,255,255,.65); }
+  .cat-chip[data-cat="GENERATION_MISUSE"]        { border-style: dotted; border-color: rgba(255,255,255,.45); }
+  .cat-chip[data-cat="AMBIGUOUS_GOLDEN"]         { opacity: .42; }
+  .cat-chip.active {
+    background: #fff !important; color: #000 !important;
+    border: 1px solid #fff !important;
+    box-shadow: 0 8px 28px rgba(255,255,255,.28);
+    transform: translateY(-2px); opacity: 1;
+  }
+
+  /* ---------- Evidence ---------- */
+  .evidence-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 26px;
+  }
+  @media (max-width: 900px) { .evidence-grid { grid-template-columns: 1fr; } }
+  .evidence-card { padding: 30px 28px; }
+  .evidence-card > h3 {
+    font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+    display: flex; align-items: center; gap: 11px; margin-bottom: 6px;
+  }
+  .field-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .18em;
+    color: var(--faint); text-transform: uppercase; margin: 24px 0 10px;
+  }
+  .query-box {
+    display: flex; gap: 13px; align-items: flex-start;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--stroke); border-top-color: rgba(255,255,255,.16);
+    border-radius: 14px; padding: 16px 18px;
+    font-size: 15px; font-weight: 500; line-height: 1.55;
+  }
+  .q-icon {
+    width: 24px; height: 24px; flex: none; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,.5); color: rgba(255,255,255,.85);
+    display: grid; place-items: center; font-size: 13px; font-weight: 700;
+  }
+  .chunk {
+    border-left: 2px solid rgba(255,255,255,.4);
+    background: rgba(255,255,255,.028);
+    border-radius: 0 12px 12px 0;
+    padding: 14px 16px; margin-bottom: 10px;
+    font-size: 13.5px; line-height: 1.7; color: rgba(255,255,255,.72);
+  }
+  .chunk-index {
+    display: block; font-size: 9.5px; font-weight: 600; letter-spacing: .16em;
+    color: var(--faint); margin-bottom: 6px;
+  }
+  .no-chunks { font-size: 13px; color: var(--faint); padding: 12px 0; }
+  .judge {
+    font-size: 13.5px; line-height: 1.75; color: var(--dim);
+    background: rgba(255,255,255,.024);
+    border: 1px dashed rgba(255,255,255,.12);
+    border-radius: 12px; padding: 15px 17px;
+  }
+  .answer-box {
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--stroke); border-top-color: rgba(255,255,255,.16);
+    border-radius: 14px; padding: 17px 19px;
+    font-size: 14.5px; line-height: 1.7; color: rgba(255,255,255,.88);
+  }
+  .answer-box.expected { border-style: dashed; color: rgba(255,255,255,.65); }
+
+  /* ---------- Confirm & Train ---------- */
+  .train-card { margin-top: 26px; padding: 34px 32px; }
+  .train-card h3 { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+  .train-desc { color: var(--dim); font-size: 14px; margin: 8px 0 22px; }
+  textarea {
+    width: 100%; min-height: 120px; resize: vertical;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--stroke); border-top-color: rgba(255,255,255,.15);
+    border-radius: 14px; color: #fff;
+    font: 400 14.5px/1.65 'Inter', sans-serif;
+    padding: 16px 18px; outline: none;
+    transition: border-color .3s var(--ease), background .3s var(--ease), box-shadow .3s var(--ease);
+  }
+  textarea::placeholder { color: rgba(255,255,255,.28); }
+  textarea:focus {
+    border-color: rgba(255,255,255,.38);
+    background: rgba(255,255,255,.06);
+    box-shadow: 0 0 0 4px rgba(255,255,255,.05);
+  }
+  .train-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-top: 18px;
+  }
+  .train-hint { font-size: 12px; color: var(--faint); }
+  .train-error {
+    margin-top: 16px; padding: 13px 16px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.05);
+    font-size: 13px; color: rgba(255,255,255,.85); line-height: 1.55;
+  }
+
+  /* ---------- Success ---------- */
+  .success-wrap { text-align: center; padding: 26px 0 10px; }
+  .success-wrap svg { width: 74px; height: 74px; }
+  .check-ring {
+    stroke-dasharray: 151; stroke-dashoffset: 151;
+    animation: dash .7s var(--ease) forwards;
+  }
+  .check-tick {
+    stroke-dasharray: 40; stroke-dashoffset: 40;
+    animation: dash .45s .55s var(--ease) forwards;
+  }
+  @keyframes dash { to { stroke-dashoffset: 0; } }
+  .success-wrap h4 { font-size: 17px; font-weight: 800; letter-spacing: -.02em; margin: 18px 0 8px; }
+  .success-wrap p { color: var(--dim); font-size: 13.5px; }
+
+  @media (max-width: 640px) {
+    .train-card, .evidence-card { padding: 24px 20px; }
+    .scan-card { padding: 40px 26px 34px; }
+  }
+</style>
+</head>
+<body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+  <div class="orb orb-c"></div>
+  <div class="grain"></div>
+  <div id="cursor-glow"></div>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="logo" href="/"><span class="logo-mark"></span>RAGWatch</a>
+      <a class="btn btn-ghost btn-pill" href="/">← Back to Dashboard</a>
+    </div>
+  </nav>
+
+  <main class="container">
+
+    <!-- Loading state: scanning beam -->
+    <div id="loader" class="loader-wrap">
+      <div class="scan-card glass">
+        <p class="eyebrow">RAGWatch Forensics</p>
+        <h2>Analyzing trace</h2>
+        <p class="loader-tid mono" id="loaderTid"></p>
+        <div class="scan-viewport">
+          <div class="scan-line"></div>
+          <div class="scan-beam"></div>
+        </div>
+        <div class="statuses">
+          <div class="status-line" id="st1"><span class="s-dot"></span>Running LLM Judge...</div>
+          <div class="status-line" id="st2"><span class="s-dot"></span>Scoring retrieval quality...</div>
+          <div class="status-line" id="st3"><span class="s-dot"></span>Applying failure taxonomy...</div>
+        </div>
+        <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorCard" class="error-card glass" hidden>
+      <span class="icon-box big">
+        <svg viewBox="0 0 24 24"><path d="M12 4l9.5 16.5h-19L12 4z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.4" r=".7" fill="currentColor" stroke="none"/></svg>
+      </span>
+      <h3>Diagnosis failed</h3>
+      <p id="errorMsg">Something went wrong.</p>
+      <a class="btn btn-ghost btn-pill" href="/">← Back to Dashboard</a>
+    </div>
+
+    <!-- Result -->
+    <div id="result" hidden>
+
+      <section class="hero">
+        <div class="hero-card glass reveal" id="heroCard">
+          <div class="hero-inner">
+            <p class="eyebrow">Failure Category</p>
+            <h1 class="category-text" id="categoryText">—</h1>
+            <div class="conf-row">
+              <span class="conf">Confidence: <strong id="confVal">0</strong>%</span>
+              <span class="trace-chip mono" id="traceChip">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="cat-legend reveal" id="catLegend">
+          <span class="cat-chip" data-cat="RETRIEVAL_MISS">RETRIEVAL_MISS</span>
+          <span class="cat-chip" data-cat="RETRIEVAL_NOISE">RETRIEVAL_NOISE</span>
+          <span class="cat-chip" data-cat="GENERATION_HALLUCINATION">GENERATION_HALLUCINATION</span>
+          <span class="cat-chip" data-cat="GENERATION_MISUSE">GENERATION_MISUSE</span>
+          <span class="cat-chip" data-cat="AMBIGUOUS_GOLDEN">AMBIGUOUS_GOLDEN</span>
+        </div>
+      </section>
+
+      <section class="evidence-grid">
+        <div class="glass lift evidence-card reveal">
+          <h3>
+            <span class="icon-box">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
+            </span>
+            Retrieval Evidence
+          </h3>
+          <p class="field-label">User Query</p>
+          <div class="query-box"><span class="q-icon">?</span><span id="queryText">—</span></div>
+          <p class="field-label">Retrieved Chunks</p>
+          <div id="chunks"></div>
+          <p class="field-label">Judge Reasoning — Retrieval</p>
+          <div class="judge" id="judgeRetrieval">—</div>
+        </div>
+
+        <div class="glass lift evidence-card reveal">
+          <h3>
+            <span class="icon-box">
+              <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.4L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.6L12 3z"/></svg>
+            </span>
+            Generation Evidence
+          </h3>
+          <p class="field-label">Generated Answer</p>
+          <div class="answer-box" id="answerText">—</div>
+          <div id="expectedWrap" hidden>
+            <p class="field-label">Expected Answer</p>
+            <div class="answer-box expected" id="expectedText"></div>
+          </div>
+          <p class="field-label">Judge Reasoning — Generation</p>
+          <div class="judge" id="judgeGeneration">—</div>
+        </div>
+      </section>
+
+      <section class="train-card glass reveal" id="trainCard">
+        <h3>Add to Golden Dataset</h3>
+        <p class="train-desc">Confirm the correct answer to prevent this failure from repeating.</p>
+
+        <div id="trainForm">
+          <textarea id="correction" placeholder="Type the confirmed correct answer…"></textarea>
+          <div class="train-footer">
+            <span class="train-hint">Saved to the golden dataset for future regression runs.</span>
+            <button class="btn btn-primary btn-lg" id="confirmBtn">
+              <svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></svg>
+              Confirm Feedback
+            </button>
+          </div>
+          <div class="train-error" id="trainError" hidden></div>
+        </div>
+
+        <div id="trainSuccess" class="success-wrap" hidden>
+          <svg viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="24" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1.5"/>
+            <circle class="check-ring" cx="26" cy="26" r="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" transform="rotate(-90 26 26)"/>
+            <path class="check-tick" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M15 27l7 7 15-16"/>
+          </svg>
+          <h4>Added to golden dataset</h4>
+          <p>Redirecting to dashboard…</p>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  var TRACE_ID = "{{ trace_id }}";
+
+  var $ = function (s) { return document.querySelector(s); };
+
+  /* ---------------- Cursor glow ---------------- */
+  var glow = $('#cursor-glow');
+  var gx = innerWidth / 2, gy = innerHeight / 2, tx = gx, ty = gy;
+  addEventListener('mousemove', function (e) { tx = e.clientX; ty = e.clientY; });
+  (function loop() {
+    gx += (tx - gx) * .12; gy += (ty - gy) * .12;
+    glow.style.transform = 'translate(' + (gx - 150) + 'px,' + (gy - 150) + 'px)';
+    requestAnimationFrame(loop);
+  })();
+
+  /* ---------------- Helpers ---------------- */
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function countUp(el, target, fmt, dur) {
+    dur = dur || 600;
+    var start = null;
+    function tick(t) {
+      if (start === null) start = t;
+      var p = Math.min(1, (t - start) / dur);
+      var e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(Math.round(target * e));
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  function stagger(container) {
+    var els = container.querySelectorAll('.reveal');
+    for (var i = 0; i < els.length; i++) els[i].style.animationDelay = (i * 50) + 'ms';
+  }
+
+  /* ---------------- Loader sequence ---------------- */
+  $('#loaderTid').textContent = TRACE_ID;
+
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { $('#progressFill').style.width = '100%'; });
+  });
+
+  ['st1', 'st2', 'st3'].forEach(function (id, i) {
+    setTimeout(function () {
+      if (i > 0) $('#st' + i).classList.add('done');
+      $('#' + id).classList.add('show');
+    }, i * 800);
+  });
+  setTimeout(function () { $('#st3').classList.add('done'); }, 2400);
+
+  /* ---------------- Diagnosis fetch ---------------- */
+  function showError(msg) {
+    var loader = $('#loader');
+    loader.classList.add('fade-out');
+    setTimeout(function () {
+      loader.hidden = true;
+      $('#errorMsg').textContent = msg || 'An unexpected error occurred.';
+      var card = $('#errorCard');
+      card.hidden = false;
+      card.classList.add('reveal');
+    }, 480);
+  }
+
+  function renderResult(data) {
+    data = data || {};
+    var category = data.category || 'UNKNOWN';
+
+    $('#categoryText').textContent = category;
+    var heroCard = $('#heroCard');
+    heroCard.setAttribute('data-category', category);
+
+    var conf = typeof data.confidence === 'number' ? data.confidence : 0;
+    var confPct = Math.round(conf <= 1 ? conf * 100 : conf);
+    countUp($('#confVal'), confPct, function (v) { return v; });
+
+    $('#traceChip').textContent = data.trace_id || TRACE_ID;
+
+    var chips = document.querySelectorAll('.cat-chip');
+    chips.forEach(function (c) {
+      c.classList.toggle('active', c.getAttribute('data-cat') === category);
+    });
+
+    var ev = data.evidence || {};
+    $('#queryText').textContent = ev.query || '—';
+    $('#judgeRetrieval').textContent = ev.judge_reasoning_retrieval || '—';
+    $('#answerText').textContent = ev.generated_answer || '—';
+    $('#judgeGeneration').textContent = ev.judge_reasoning_generation || '—';
+
+    if (ev.expected_answer) {
+      $('#expectedWrap').hidden = false;
+      $('#expectedText').textContent = ev.expected_answer;
+    }
+
+    var chunksWrap = $('#chunks');
+    chunksWrap.innerHTML = '';
+    var chunks = Array.isArray(ev.retrieved_chunks) ? ev.retrieved_chunks : [];
+    if (!chunks.length) {
+      var none = document.createElement('p');
+      none.className = 'no-chunks';
+      none.textContent = 'No chunks were retrieved for this trace.';
+      chunksWrap.appendChild(none);
+    } else {
+      chunks.forEach(function (chunk, i) {
+        var text = typeof chunk === 'string' ? chunk
+          : (chunk && (chunk.text || chunk.content || chunk.chunk)) || JSON.stringify(chunk);
+        var opacity = Math.max(.1, .55 - i * .14).toFixed(2);
+        var div = document.createElement('div');
+        div.className = 'chunk';
+        div.style.borderLeftColor = 'rgba(255,255,255,' + opacity + ')';
+        var idx = document.createElement('span');
+        idx.className = 'chunk-index mono';
+        idx.textContent = 'CHUNK ' + String(i + 1).padStart(2, '0');
+        var body = document.createElement('span');
+        body.textContent = text;
+        div.appendChild(idx);
+        div.appendChild(body);
+        chunksWrap.appendChild(div);
+      });
+    }
+
+    var loader = $('#loader');
+    loader.classList.add('fade-out');
+    setTimeout(function () {
+      loader.hidden = true;
+      var result = $('#result');
+      result.hidden = false;
+      stagger(result);
+    }, 480);
+  }
+
+  function diagnose() {
+    Promise.all([
+      fetch('/api/forensics/' + TRACE_ID, { method: 'POST', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); }),
+      wait(2800)
+    ]).then(function (res) {
+      var json = res[0];
+      if (json && json.success === true) renderResult(json.data);
+      else showError((json && (json.error || json.message)) || 'The diagnosis service returned an unexpected response.');
+    }).catch(function (err) {
+      showError('Could not reach the diagnosis service: ' + (err && err.message ? err.message : 'network error'));
+    });
+  }
+
+  /* ---------------- Confirm & Train ---------------- */
+  var confirmBtn = $('#confirmBtn');
+  var correction = $('#correction');
+
+  function showTrainError(msg) {
+    var box = $('#trainError');
+    box.textContent = msg;
+    box.hidden = false;
+  }
+
+  confirmBtn.addEventListener('click', function () {
+    var value = correction.value.trim();
+    $('#trainError').hidden = true;
+    if (!value) {
+      showTrainError('Please enter the correct answer before confirming.');
+      correction.focus();
+      return;
+    }
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Confirming…';
+
+    fetch('/api/forensics/' + TRACE_ID + '/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ human_correction: value })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, json: j }; });
+    }).then(function (res) {
+      if (res.ok && res.json.success !== false) {
+        $('#trainForm').hidden = true;
+        $('#trainSuccess').hidden = false;
+        setTimeout(function () { window.location.href = '/'; }, 2000);
+      } else {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></svg>Confirm Feedback';
+        showTrainError((res.json && (res.json.error || res.json.message)) || 'The feedback could not be saved. Please try again.');
+      }
+    }).catch(function (err) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></svg>Confirm Feedback';
+      showTrainError('Network error: ' + (err && err.message ? err.message : 'could not reach the server.'));
+    });
+  });
+
+  diagnose();
+})();
+</script>
+</body>
+</html>
