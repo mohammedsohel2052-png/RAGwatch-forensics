@@ -10,7 +10,8 @@ from ragwatch.forensics.diagnose import run_diagnosis
 from ragwatch.forensics.feedback import append_to_golden_dataset
 
 
-app = Flask(__name__)
+template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
+app = Flask(__name__, template_folder=template_dir)
 
 # Try to find databases in the current working directory
 EVAL_DB = "eval_results.db"
